@@ -38,3 +38,4 @@ To reach feature parity with the current `blockstack` cli the following work nee
 - [ ] Implement the `price` commands with their proper methods
 - [ ] Implement the `wallet` commands with their proper methods
 - [ ] Add and implement the `blockstack api` command
+- [ ] Have commands for generating a config file and be able to set values programmatically, not interactively
