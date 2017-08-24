@@ -30,12 +30,12 @@ To reach feature parity with the current `blockstack` cli the following work nee
 
 - [ ] Make the top level `--host` and `--directory` flags work as intended (Or maybe just the `--directory` flag)
 - [ ] Make all `--flags` configurable via `ENV` with a commonsense naming scheme (`BLOCKSTACK_CLI_HOST`, `BLOCKSTACK_CLI_DIRECTORY`, etc..)
-- [ ] Implement the `blockchain` commands with their proper methods
+- [X] Implement the `blockchain` commands with their proper methods
 - [ ] Implement the `gaia` commands with their proper methods
-- [ ] Implement the `name` commands with their proper methods
-- [ ] Implement the `namespace` commands with their proper methods
-- [ ] Implement the `node` commands with their proper methods
-- [ ] Implement the `price` commands with their proper methods
-- [ ] Implement the `wallet` commands with their proper methods
+- [X] Implement the `name` commands with their proper methods
+- [X] Implement the `namespace` commands with their proper methods
+- [X] Implement the `node` commands with their proper methods
+- [X] Implement the `price` commands with their proper methods
+- [X] Implement the `wallet` commands with their proper methods
 - [ ] Add and implement the `blockstack api` command
 - [ ] Have commands for generating a config file and be able to set values programmatically, not interactively
