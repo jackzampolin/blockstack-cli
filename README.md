@@ -32,6 +32,9 @@ Also cool is the `-fmt` flag. Outputs the returned data in `{json|yaml|toml}`!
 
 ### Future work
 
+- [ ] Integrate [`pyinstaller`](https://pyinstaller.readthedocs.io/en/stable/operating-mode.html) to make builds for all OS
+- [ ] Build different OS versions with the [`pyinstaller-docker`](https://github.com/cdrx/docker-pyinstaller/) images for mad convenience
+
 To reach feature parity with the current `blockstack` cli the following work needs to be completed.
 
 - [X] Make the top level `--host` and `--password` flags work as intended
