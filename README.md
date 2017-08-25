@@ -15,27 +15,32 @@ $ blockstack-cli --help
 
 ### Current Progress
 
-All the endpoints have commands stubbed out with the arguments they need printing to console. I have only wired up two commands:
+All the endpoints have been implemented except the following:
 
 ```
-$ blockstack-cli node ping
-$ blockstack-cli node config get 
+$ blockstack-cli blockchain send_transaction
+$ blockstack-cli wallet set_key
+$ blockstack-cli wallet send
+$ blockstack-cli gaia *
 ```
 
-These just output the raw JSON returned by `blockstack.blockstack_client.ping()` and `blockstack.blockstack_client.read_config_file()`.
+### Cool features
+
+Try the `-debug` flag! It will print out the details of the request sent for troubleshooting!
+
+Also cool is the `-fmt` flag. Outputs the returned data in `{json|yaml|toml}`!
 
 ### Future work
 
 To reach feature parity with the current `blockstack` cli the following work needs to be completed.
 
-- [ ] Make the top level `--host` and `--directory` flags work as intended (Or maybe just the `--directory` flag)
-- [ ] Make all `--flags` configurable via `ENV` with a commonsense naming scheme (`BLOCKSTACK_CLI_HOST`, `BLOCKSTACK_CLI_DIRECTORY`, etc..)
+- [X] Make the top level `--host` and `--password` flags work as intended
+- [X] Make all `--flags` configurable via `ENV` with a commonsense naming scheme (`BLOCKSTACK_CLI_HOST`, `BLOCKSTACK_CLI_DIRECTORY`, etc..)
 - [X] Implement the `blockchain` commands with their proper methods
-- [ ] Implement the `gaia` commands with their proper methods
+- [ ] Implement the `gaia` commands with their proper methods - Waiting per @jcnelson
 - [X] Implement the `name` commands with their proper methods
 - [X] Implement the `namespace` commands with their proper methods
 - [X] Implement the `node` commands with their proper methods
 - [X] Implement the `price` commands with their proper methods
 - [X] Implement the `wallet` commands with their proper methods
-- [ ] Add and implement the `blockstack api` command
-- [ ] Have commands for generating a config file and be able to set values programmatically, not interactively
+- [X] Have commands for generating a config file and be able to set values programmatically, not interactively

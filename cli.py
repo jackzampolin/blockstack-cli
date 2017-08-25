@@ -1,15 +1,18 @@
 import click
 import requests
-import blockstack
 import json
+import toml
+import yaml
+import os
 
 class Config(object):
     
     def __init__(self):
         self.host = 'localhost:6270'
-        self.directory = '~/.blockstack'
         self.method = 'http://'
         self.password = 'foobarbaz'
+        self.debug = False
+        self.fmt = 'json'
 
 pass_config = click.make_pass_decorator(Config, ensure=True)
 
@@ -20,20 +23,102 @@ def create_url(config, path):
 def make_headers(config):
     return {'Authorization': 'bearer {}'.format(config.password), 'Origin': 'http://localhost:3000', 'Content-Type': 'application/json'}
 
+def make_debug_headers(config):
+    return {'Authorization': 'bearer PASSWORD_OMITTED', 'Origin': 'http://localhost:3000', 'Content-Type': 'application/json'}
+
+def json_out(r):
+    return json.dumps(r,sort_keys=True, indent=4, separators=(',', ': '))
+
+def output(config, url, r):
+    if config.debug:
+        click.echo("Request URL: {} {}".format(r.request.method, url))
+        click.echo("Request Headers:\n{}".format(json_out(make_debug_headers(config))))
+        if r.request.body:
+            click.echo("Request Payload:\n{}".format(json_out(json.loads(r.request.body))))
+        click.echo("Response Code: {}".format(r.status_code))
+        click.echo("JSON Body:")
+        if r.text:
+            click.echo(json_out(r.json()))
+    
+    if config.fmt == "json":
+        if r.text:
+            click.echo(json_out(r.json()))
+    elif config.fmt == "yaml":
+        if r.text:
+            click.echo(yaml.safe_dump(r.json(), default_flow_style=False))
+    elif config.fmt == "toml":
+        if r.text:
+            click.echo(toml.dumps(r.json()))
+    else:
+        click.echo("not a supported output format")
+
+# Default Configuration
+default_config = {
+  'subdomain-resolution': {
+    'subdomains_db': '{}.blockstack/subdomains.db'.format(os.environ["HOME"]),
+  },
+  'blockstack-client': {
+    'api_endpoint_host': 'localhost',
+    'blockchain_writer': 'blockstack_utxo',
+    'api_endpoint_port': '6270',
+    'api_password': '{}'.format(os.urandom(32).encode('base-64')[:-2]),
+    'poll_interval': '300',
+    'server': 'node.blockstack.org',
+    'email': '',
+    'metadata': 'metadata',
+    'storage_drivers_required_write': 'disk,dropbox',
+    'queue_path': '{}.blockstack/queues.db'.format(os.environ["HOME"]),
+    'storage_drivers': 'disk,dropbox,s3,blockstack_resolver,blockstack_server,http,dht',
+    'blockchain_reader': 'blockstack_utxo',
+    'client_version': '0.14.4.2',
+    'api_endpoint_bind': 'localhost',
+    'port': 6264,
+    'anonymous_statistics': True,
+  },
+  'bitcoind': {
+    'passwd': 'blockstacksystem',
+    'regtest': 'False',
+    'spv_path': '{}.virtualchain-spv-headers.dat'.format(os.environ["HOME"]),
+    'server': 'bitcoin.blockstack.com',
+    'p2p_port': '8333',
+    'user': 'blockstack',
+    'timeout': '300',
+    'port': '8332',
+  },
+  'blockstack': {
+    'server': 'node.blockstack.org',
+  },
+  'blockchain-writer': {
+    'url': 'https://utxo.blockstack.org',
+    'utxo_provider': 'blockstack_utxo',
+  },
+  'blockchain-reader': {
+    'url': 'https://utxo.blockstack.org',
+    'utxo_provider': 'blockstack_utxo',
+  },
+}
+
 ###########################
 # GROUP: blockstack-cli
 # blockstack-cli
 ###########################
 @click.group()
-@click.option('--host', default='localhost:6270', help='blockstack api node to connect to ')
-@click.option('--method', default='http://', help='http:// or https://')
-@click.option('--password', default='foobarbaz', help='api password for instance you wish to connect to')
+@click.option('-host', default='localhost:6270', help='blockstack api node to connect to ', envvar="BLOCKSTACK_CLI_HOST")
+@click.option('-ssl', is_flag=True)
+@click.option('-debug', is_flag=True)
+@click.option('-password', default='foobarbaz', help='api password for instance to connect', envvar="BLOCKSTACK_CLI_PASSWORD")
+@click.option('-fmt', default='json', help='format to output responses {json|toml|yaml}')
 @pass_config
-def cli(config, host, password, method):
+def cli(config, host, password, ssl, debug, fmt):
     """A command line interface for the blockstack network and local installations"""
     config.host = host
+    config.debug = debug
     config.password = password
-    config.method = method
+    config.fmt = fmt
+    if ssl:
+        config.method = "https://"
+    else:
+        config.method = "http://"
 
 ###########################
 # GROUP: NODE
@@ -51,28 +136,51 @@ def node(config):
 @pass_config
 def ping(config):
     """check availibiltiy for connected node"""
-    r = requests.get(create_url(config,"/v1/node/ping"))
-    click.echo(r.json())
+    url = create_url(config,"/v1/node/ping")
+    r = requests.get(url, headers=make_headers(config))
+    output(config, url, r)
+
+# blockstack-cli node registrar
+# https://blockstack.github.io/blockstack-core/#core-node-administration-get-registrar-state
+@node.command()
+@pass_config
+def registrar(config):
+    """check registrar state"""
+    path = "/v1/node/registrar/state"
+    url = create_url(config,path)
+    r = requests.get(url, headers=make_headers(config))
+    output(config, url, r)
     
-# GROUP: NODE CONFIG
-# blockstack-cli node config
-@node.group()
+###########################
+# GROUP: CONFIG
+# blockstack-cli config
+###########################
+@cli.group()
 @pass_config
 def config(config):
     """configuration commands for connected node"""
     pass
 
-# blockstack-cli node config get
+# blockstack-cli config get
 # https://blockstack.github.io/blockstack-core/#core-node-administration-get-the-node-s-config
 @config.command()
 @pass_config
 def get(config):
-    """retrieve configuration for connected node"""
+    """print TOML config for current node"""
     path = "/v1/node/config"
-    r = requests.get(create_url(config,path), headers=make_headers(config))
-    click.echo(r.json())
+    url = create_url(config,path)
+    r = requests.get(url, headers=make_headers(config))
+    output(config, url, r)
 
-# blockstack-cli node config set
+# blockstack-cli config default
+# https://blockstack.github.io/blockstack-core/#core-node-administration-get-the-node-s-config
+@config.command()
+@pass_config
+def default(config):
+    """print default TOML config to STDOUT"""
+    click.echo(toml.dumps(default_config))
+
+# blockstack-cli config set
 # https://blockstack.github.io/blockstack-core/#core-node-administration-set-config-field
 @config.command()
 @click.argument('SECTION')
@@ -81,14 +189,12 @@ def get(config):
 @pass_config
 def set(config, section, key, value):
     """reset configuration KEY in SECTION to VALUE for configured node"""
-    click.echo('setting key {} in section {} on {} to {}...'.format(key,section,config.host,value))
     path = "/v1/node/config/{}?{}={}".format(section,key,value)
     url = create_url(config,path)
     r = requests.post(url, headers=make_headers(config))
-    click.echo(r.json())
+    output(config, url, r)
 
-
-# blockstack-cli node config delete
+# blockstack-cli config delete
 # https://blockstack.github.io/blockstack-core/#core-node-administration-delete-a-config-field
 @config.command()
 @click.argument('SECTION')
@@ -96,47 +202,22 @@ def set(config, section, key, value):
 @pass_config
 def delete(config, section, key):
     """remove configuration KEY in SECTION for configured node"""
-    click.echo('deleting key {} in section {} on {}...'.format(key,section,config.host))
     path = "/v1/node/config/{}/{}".format(section,key)
     url = create_url(config,path)
     r = requests.delete(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
-# blockstack-cli node config delete_section
+# blockstack-cli config delete_section
 # https://blockstack.github.io/blockstack-core/#core-node-administration-delete-a-config-section
 @config.command()
 @click.argument('SECTION')
 @pass_config
 def delete_section(config, section):
     """remove configuration SECTION for configured node"""
-    click.echo('deleting section {} on {}...'.format(section,config.host))
     path = "/v1/node/config/{}".format(section)
     url = create_url(config,path)
     r = requests.delete(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
-
-# blockstack-cli node registrar
-# https://blockstack.github.io/blockstack-core/#core-node-administration-get-registrar-state
-@node.command()
-@pass_config
-def registrar(config):
-    """check registrar state"""
-    click.echo('checking registrar state...')
-    path = "/v1/node/registrar/state"
-    url = create_url(config,path)
-    r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
-
-# blockstack-cli node methods
-# This is for development and lets me print methods from different modules
-@node.command()
-@pass_config
-def methods(config):
-    """print out blockstack_client methods"""
-    click.echo(dir(blockstack.blockstack_client))
+    output(config, url, r)
     
 ###########################
 # GROUP: WALLET
@@ -154,12 +235,10 @@ def wallet(config):
 @pass_config
 def payment_address(config):
     """retrieve the payment_address for your blockstack wallet"""
-    click.echo("blockstack wallet payment_address")
     path = "/v1/wallet/payment_address"
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli wallet owner_address
 # https://blockstack.github.io/blockstack-core/#core-wallet-management-get-wallet-owner-address
@@ -167,26 +246,22 @@ def payment_address(config):
 @pass_config
 def owner_address(config):
     """retrieve the owner_address for your blockstack wallet"""
-    click.echo("blockstack wallet owner_address")
     path = "/v1/wallet/owner_address"
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
-
+    output(config, url, r)
+    
 # blockstack-cli wallet pub_key
 # https://blockstack.github.io/blockstack-core/#core-wallet-management-get-wallet-data-public-key
 @wallet.command()
 @pass_config
 def pub_key(config):
     """retrieve the pub_key for your blockstack wallet"""
-    click.echo("blockstack wallet pub_key")
     path = "/v1/wallet/data_pubkey"
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
-
+    output(config, url, r)
+    
 # NOT IMPLEMENTED
 # blockstack-cli wallet set_key
 # https://blockstack.github.io/blockstack-core/#core-wallet-management-set-a-specific-wallet-key
@@ -195,7 +270,9 @@ def pub_key(config):
 @pass_config
 def set_key(config, key):
     """set a specific key to use"""
-    click.echo("NOT IMPLEMENTED\narg passed:\n  KEY -> {}".format(key))
+    click.echo("NOT IMPLEMENTED")
+    click.echo("arg passed:")
+    click.echo("  KEY -> {}".format(key))
 
 
 # blockstack-cli wallet balance
@@ -205,14 +282,12 @@ def set_key(config, key):
 @pass_config
 def balance(config, confirmations):
     """retrieve wallet balance"""
-    click.echo("blockstack wallet balance")
     path = "/v1/wallet/balance/{}".format(confirmations)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
-# BROKEN
+# NOT IMPLEMENTED
 # blockstack-cli wallet send
 # https://blockstack.github.io/blockstack-core/#core-wallet-management-withdraw-payment-wallet-funds
 @wallet.command()
@@ -223,7 +298,11 @@ def balance(config, confirmations):
 @pass_config
 def send(config,amount,address,confirmations,tx_only):
     """send AMOUNT to ADDRESS..."""
-    click.echo("nCURRENTLY BROKEN, NEED TO TEST ON REGTEST\nargs passed:\n  AMOUNT -> {}\n  ADDRESS -> {}\n  --confirmations -> {}".format(amount, address, confirmations))
+    click.echo("NOT IMPLEMENTED, TEST ON REGTEST")
+    click.echo("args passed:")
+    click.echo("  AMOUNT -> {}".format(amount))
+    click.echo("  ADDRESS -> {}".format(address))
+    click.echo("  Confs -> {}".format(confirmations))
 
 ###########################
 # GROUP: NAME
@@ -241,14 +320,12 @@ def name(config):
 @click.argument('NAME')
 @pass_config
 def register(config, name):
-    """register a NAME"""
-    click.echo('register for {}'.format(name))
+    """register a NAME, requires funds in wallet"""
     path = "/v1/names"
     payload = {'name': name}
     url = create_url(config,path)
     r = requests.post(url, headers=make_headers(config), json=payload)
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name revoke
 # https://blockstack.github.io/blockstack-core/#managing-names-revoke-name
@@ -256,13 +333,11 @@ def register(config, name):
 @click.argument('NAME')
 @pass_config    
 def revoke(config, name):
-    """revoke NAME"""
-    click.echo('revoke for {}'.format(name))
+    """revoke an owned NAME"""
     path = "/v1/names/{}".format(name)
     url = create_url(config,path)
     r = requests.delete(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name transfer
 # https://blockstack.github.io/blockstack-core/#managing-names-transfer-name
@@ -271,14 +346,12 @@ def revoke(config, name):
 @click.argument('OWNER')
 @pass_config    
 def transfer(config, name, owner):
-    """transfer NAME to OWNER"""
-    click.echo('transfer {} to {}'.format(name, owner))
+    """transfer an owned NAME to OWNER"""
     path = "/v1/names/{}/owner".format(name)
     payload = {'owner': owner}
     url = create_url(config,path)
     r = requests.put(url, headers=make_headers(config), json=payload)
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name set_zonefile
 # https://blockstack.github.io/blockstack-core/#managing-names-set-zone-file
@@ -288,13 +361,11 @@ def transfer(config, name, owner):
 @pass_config    
 def set_zonefile(config, name, zonefile):
     """set zonefile for NAME"""
-    click.echo('set_zonefile for {} from zonefile {}'.format(name, zonefile))
     path = "/v1/names/{}/zonefile".format(name)
     payload = { 'zonefile': zonefile.read() }
     url = create_url(config,path)
     r = requests.put(url, headers=make_headers(config), json=payload)
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name get_zonefile
 # https://blockstack.github.io/blockstack-core/#managing-names-fetch-zone-file
@@ -303,12 +374,10 @@ def set_zonefile(config, name, zonefile):
 @pass_config    
 def get_zonefile(config, name):
     """get zonefile for NAME"""
-    click.echo('get_zonefile for {}'.format(name))
     path = "/v1/names/{}/zonefile".format(name)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name get_page
 # https://blockstack.github.io/blockstack-core/#name-querying-get-all-names
@@ -320,8 +389,7 @@ def get_page(config,page):
     path = "/v1/names?page={}".format(page)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name get
 # https://blockstack.github.io/blockstack-core/#name-querying-get-name-info
@@ -330,12 +398,10 @@ def get_page(config,page):
 @pass_config
 def get(config,name):
     """get details for a name"""
-    click.echo("getting {} details".format(name)) 
     path = "/v1/names/{}".format(name)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name history
 # https://blockstack.github.io/blockstack-core/#name-querying-name-history
@@ -344,12 +410,10 @@ def get(config,name):
 @pass_config
 def history(config,name):
     """get the transfer history for a name"""
-    click.echo("getting history for {}".format(name)) 
     path = "/v1/names/{}/history".format(name)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name zonefile_history
 # https://blockstack.github.io/blockstack-core/#name-querying-get-historical-zone-file
@@ -359,12 +423,10 @@ def history(config,name):
 @pass_config
 def zonefile_history(config,name,zonefilehash):
     """zonefile_history name thing"""
-    click.echo("getting zonefile history for {} from zonefilehash {}".format(name,zonefilehash)) 
     path = "/v1/names/{}/zonefile/{}".format(name,zonefilehash)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli name address
 # https://blockstack.github.io/blockstack-core/#name-querying-get-names-owned-by-address
@@ -374,12 +436,10 @@ def zonefile_history(config,name,zonefilehash):
 @pass_config
 def address(config,address,blockchain):
     """address name thing"""
-    click.echo("Finding names associated with address {} on the {} blockchain".format(address,blockchain)) 
     path = "/v1/addresses/{}/{}".format(blockchain,address)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 ###########################
 # GROUP: PRICE
@@ -398,12 +458,10 @@ def price(config):
 @pass_config
 def namespace(config,namespace):
     """get the price for a namespace"""
-    click.echo("Fetching price for namespace {}...".format(namespace))
     path = "/v1/prices/namespaces/{}".format(namespace)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli price name 
 # https://blockstack.github.io/blockstack-core/#price-checks-get-name-price
@@ -412,12 +470,10 @@ def namespace(config,namespace):
 @pass_config
 def name(config,name):
     """get the price for a name"""
-    click.echo("Fetching price for name {}...".format(name))
     path = "/v1/prices/names/{}".format(name)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 
 ###########################
@@ -437,12 +493,10 @@ def blockchain(config):
 @pass_config
 def get_consensus(config,blockchain):
     """get_consensus hash from the connected blockchain node"""
-    click.echo('fetching consensus hash from {} node...'.format(blockchain))
     path = "/v1/blockchains/{}/consensus".format(blockchain)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli blockchain get_pending
 # https://blockstack.github.io/blockstack-core/#blockchain-operations-get-pending-transactions    
@@ -451,12 +505,10 @@ def get_consensus(config,blockchain):
 @pass_config
 def get_pending(config,blockchain):
     """get_pending transactions from connected blockchain node"""
-    click.echo('getting pending {} from connected node...'.format(blockchain))
     path = "/v1/blockchains/{}/pending".format(blockchain)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli blockchain get_utxo
 # https://blockstack.github.io/blockstack-core/#blockchain-operations-get-unspent-outputs
@@ -466,12 +518,10 @@ def get_pending(config,blockchain):
 @pass_config
 def get_utxo(config,blockchain,address):
     """get unspent transaction outputs from an ADDRESS"""
-    click.echo("getting utxo from {} address {}...".format(blockchain,address))
     path = "/v1/blockchains/{}/{}/unspent".format(blockchain,address)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli blockchain send_transaction
 # https://blockstack.github.io/blockstack-core/#blockchain-operations-broadcast-transaction
@@ -632,31 +682,27 @@ def namespace(config):
     """these are namespace commands"""
     pass
     
-    
 # blockstack-cli namespace all
 # https://blockstack.github.io/blockstack-core/#namespace-operations-get-all-namespaces
 @namespace.command()
 @pass_config
 def all(config):
-    """get all namespaces"""
-    click.echo("getting all namespaces...")
+    """get a list of all namespaces"""
     path = "/v1/namespaces".format(blockchain,address)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
 
 # blockstack-cli namespace names
 # https://blockstack.github.io/blockstack-core/#namespace-operations-get-namespace-names
 @namespace.command()
-@click.option('--tld', default='id', help='top level domain to look for names in...')
+@click.option('-tld', default='id', help='top level domain to look for names in...')
 @click.argument("PAGE")
 @pass_config
 def names(config,page,tld):
-    """get a PAGE of names from a namespace"""
-    click.echo("get page {} of names from namespace .{}".format(page,tld))
+    """get a PAGE of names from a -tld"""
     path = "/v1/namespaces/{}/names?page={}".format(tld,page)
     url = create_url(config,path)
     r = requests.get(url, headers=make_headers(config))
-    click.echo(r.status_code)
-    click.echo(r.json())
+    output(config, url, r)
+

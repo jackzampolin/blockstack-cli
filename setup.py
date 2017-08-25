@@ -6,8 +6,10 @@ setup(
     py_modules=['cli'],
     install_requires=[
         'Click',
-        'blockstack',
         'requests',
+        'toml',
+        'json',
+        'yaml',
     ],
     entry_points='''
         [console_scripts]
