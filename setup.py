@@ -8,8 +8,6 @@ setup(
         'Click',
         'requests',
         'toml',
-        'json',
-        'yaml',
     ],
     entry_points='''
         [console_scripts]

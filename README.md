@@ -4,12 +4,11 @@ This is a POC for creating a blockstack-cli that maps all the endpoints on the [
 
 I've built this demo using the [`Click`](https://github.com/pallets/click) command line tool repository written in python. This will enable Blockstack to use prebuilt methods from `blockstack_client` to quickly fill out the functionality of the current CLI. I have only implemented the endpoints currently, but any python methods can be used under commands easily in this framework.
 
-### Getting started
+### Getting started / Developing
 
 ```
 $ git clone git@github.com:jackzampolin/blockstack-cli.git && cd blockstack-cli
-$ . venv/bin/activate
-$ pip install --editable .
+$ sudo pip install --editable .
 $ blockstack-cli --help
 ```
 

@@ -24,7 +24,7 @@ def make_headers(config):
     return {'Authorization': 'bearer {}'.format(config.password), 'Origin': 'http://localhost:3000', 'Content-Type': 'application/json'}
 
 def make_debug_headers(config):
-    return {'Authorization': 'bearer PASSWORD_OMITTED', 'Origin': 'http://localhost:3000', 'Content-Type': 'application/json'}
+    return {'Authorization': 'bearer {}'.format(config.password), 'Origin': 'http://localhost:3000', 'Content-Type': 'application/json'}
 
 def json_out(r):
     return json.dumps(r,sort_keys=True, indent=4, separators=(',', ': '))
@@ -177,6 +177,17 @@ def get(config):
 def default(config):
     """print default TOML config to STDOUT"""
     click.echo(toml.dumps(default_config))
+
+# blockstack-cli config docker
+# https://blockstack.github.io/blockstack-core/#core-node-administration-get-the-node-s-config
+@config.command()
+@pass_config
+def docker(config):
+    """print default TOML config to STDOUT"""
+    dc = default_config
+    dc['blockstack-client']['api_endpoint_bind'] = '0.0.0.0'
+    dc['blockstack-client']['api_endpoint_host'] = '0.0.0.0'
+    click.echo(toml.dumps(dc))
 
 # blockstack-cli config set
 # https://blockstack.github.io/blockstack-core/#core-node-administration-set-config-field
