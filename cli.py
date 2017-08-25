@@ -101,11 +101,11 @@ default_config = {
 # blockstack-cli
 ###########################
 @click.group()
-@click.option('-host', default='localhost:6270', help='blockstack api node to connect to ', envvar="BLOCKSTACK_CLI_HOST")
-@click.option('-ssl', is_flag=True)
-@click.option('-debug', is_flag=True)
-@click.option('-password', default='foobarbaz', help='api password for instance to connect', envvar="BLOCKSTACK_CLI_PASSWORD")
-@click.option('-fmt', default='json', help='format to output responses {json|toml|yaml}')
+@click.option('--host', default='localhost:6270', help='blockstack api node to connect to ', envvar="BLOCKSTACK_CLI_HOST")
+@click.option('--ssl', is_flag=True)
+@click.option('--debug', is_flag=True)
+@click.option('--password', default='foobarbaz', help='api password for instance to connect', envvar="BLOCKSTACK_CLI_PASSWORD")
+@click.option('--fmt', default='json', help='format to output responses {json|toml|yaml}')
 @pass_config
 def cli(config, host, password, ssl, debug, fmt):
     """A command line interface for the blockstack network and local installations"""
