@@ -36,9 +36,7 @@ def output(config, url, r):
         if r.request.body:
             click.echo("Request Payload:\n{}".format(json_out(json.loads(r.request.body))))
         click.echo("Response Code: {}".format(r.status_code))
-        click.echo("JSON Body:")
-        if r.text:
-            click.echo(json_out(r.json()))
+        click.echo("Response Body ({}):".format(config.fmt))
     
     if config.fmt == "json":
         if r.text:
