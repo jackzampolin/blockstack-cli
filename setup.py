@@ -8,6 +8,7 @@ setup(
         'Click',
         'requests',
         'toml',
+        'pyyaml',
     ],
     entry_points='''
         [console_scripts]
